@@ -24,7 +24,7 @@ Runs on port `8085`. Configure via environment variables in `docker-compose.yml`
   `/cwa-book-ingest`, mounted from the host's CWA ingest folder)
 - `BOOKORBIT_LIBRARY_DIR` — optional; path inside the container to also copy
   cleaned EPUBs, mounted from BookOrbit's epubs library folder
-  (`~/bookorbit/books/epubs` — the same folder BookOrbit's library scanner/
+  (`/mnt/nextcloud-data/library/epubs` — the same folder BookOrbit's library scanner/
   watcher covers, so no manual Book Dock review step). Unset skips the
   BookOrbit copy.
 - `MAX_UPLOAD_MB` — max EPUB upload size (default `500`)
