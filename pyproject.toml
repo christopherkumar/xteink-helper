@@ -1,0 +1,10 @@
+[project]
+name = "xteink-helper"
+version = "0.1.0"
+description = "CrossPoint PXC converter + OceanofPDFs watermark remover, served from one container"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pymupdf>=1.28.2",
+    "flask>=3.0.0",
+]

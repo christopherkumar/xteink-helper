@@ -1,0 +1,32 @@
+services:
+  xteink-helper:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      network: host
+      additional_contexts:
+        frontend-src: ../crosspoint-pxc-converter
+    container_name: xteink-helper
+    user: "1000:1000"
+    environment:
+      - INGEST_DIR=/cwa-book-ingest
+      - BOOKORBIT_LIBRARY_DIR=/bookorbit-epubs
+      - TZ=Australia/Brisbane
+    volumes:
+      - /mnt/nextcloud-data/library/epubs:/bookorbit-epubs
+    networks:
+      - default
+      - proxy
+    ports:
+      - "127.0.0.1:18085:8085"
+    restart: unless-stopped
+    labels:
+      - homepage.group=Library
+      - homepage.name=XTeink Helper
+      - homepage.icon=/icons/xteink.png
+      - homepage.href=https://christopher-hp-laptop-15s-fq1xxx.tail3b34f8.ts.net:8085
+
+networks:
+  default:
+  proxy:
+    external: true
