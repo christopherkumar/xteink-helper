@@ -14,7 +14,9 @@ pymupdf.TOOLS.mupdf_display_errors(False)
 pymupdf.TOOLS.mupdf_display_warnings(False)
 
 URI_MATCH = "oceanofpdfs.com"
-TEXT_PATTERN = re.compile(r"(?i)o\s*c\s*e\s*a\s*n\s*o\s*f\s*p\s*d\s*f\s*s?\s*\.\s*c\s*o\s*m")
+TEXT_PATTERN = re.compile(
+    r"(?i)o\s*c\s*e\s*a\s*n\s*o\s*f\s*p\s*d\s*f\s*s?\s*\.\s*c\s*o\s*m"
+)
 ANCHOR_PATTERN = re.compile(
     r'<a\b[^>]*href="[^"]*oceanofpdfs\.com[^"]*"[^>]*>.*?</a>',
     re.IGNORECASE | re.DOTALL,
@@ -51,7 +53,9 @@ def process_pdf(pdf_path: Path, dry_run: bool) -> tuple[bool, int]:
                     for span in line.get("spans", []):
                         span_text = span.get("text", "")
                         if span_text and TEXT_PATTERN.search(span_text):
-                            page.add_redact_annot(pymupdf.Rect(span["bbox"]), fill=(1, 1, 1))
+                            page.add_redact_annot(
+                                pymupdf.Rect(span["bbox"]), fill=(1, 1, 1)
+                            )
                             hits += 1
             page.apply_redactions(images=pymupdf.PDF_REDACT_IMAGE_NONE)
 
@@ -100,9 +104,10 @@ def process_epub(epub_path: Path, dry_run: bool) -> tuple[bool, int]:
     stat = epub_path.stat()
     temp_path = epub_path.with_suffix(epub_path.suffix + ".tmp")
 
-    with zipfile.ZipFile(epub_path, "r") as zin, zipfile.ZipFile(
-        temp_path, "w", zipfile.ZIP_DEFLATED
-    ) as zout:
+    with (
+        zipfile.ZipFile(epub_path, "r") as zin,
+        zipfile.ZipFile(temp_path, "w", zipfile.ZIP_DEFLATED) as zout,
+    ):
         for info in zin.infolist():
             data = changed_entries.get(info.filename, zin.read(info.filename))
             zout.writestr(info, data)
@@ -150,7 +155,7 @@ def main() -> int:
     for file_path in files:
         try:
             changed, hits = processor(file_path, args.dry_run)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - one bad file must not stop the batch
             failed += 1
             print(f"FAILED: {file_path} | {e}")
             continue

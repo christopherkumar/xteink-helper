@@ -42,12 +42,14 @@ def unique_destination(directory: Path, filename: str) -> Path:
 
 
 def log(name: str, ok: bool, message: str) -> None:
-    history.appendleft({
-        "name": name,
-        "ok": ok,
-        "message": message,
-        "time": datetime.now().strftime("%b %d, %H:%M"),
-    })
+    history.appendleft(
+        {
+            "name": name,
+            "ok": ok,
+            "message": message,
+            "time": datetime.now().strftime("%b %d, %H:%M"),
+        }
+    )
 
 
 @app.after_request
@@ -61,6 +63,7 @@ def add_isolation_headers(response):
 
 # --- CrossPoint PXC converter: static SPA served from ./static (vite build output).
 # The OceanofPDFs remover lives inside this same page as a tab (see removerTab.ts). ---
+
 
 @app.route("/")
 def converter_index():
@@ -81,6 +84,7 @@ def converter_static(filename):
 
 
 # --- OceanofPDFs watermark remover: JSON API consumed by the remover tab ---
+
 
 @app.route("/remover")
 def remover_redirect():
@@ -114,7 +118,7 @@ def remover_upload():
             except zipfile.BadZipFile:
                 log(name, False, "not a valid EPUB (bad zip)")
                 continue
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - one bad file must not stop the batch
                 log(name, False, f"failed: {e}")
                 continue
 
