@@ -34,5 +34,5 @@ No authentication — intended to run on a private/Tailscale-only network.
 ## Why one container
 
 Both tools are small, low-traffic, no-auth homelab utilities used together (convert a
-wallpaper, clean a book) — one Flask process serving a static SPA plus one upload route
+wallpaper, clean a book) — one FastAPI (uvicorn) process serving a static SPA plus one upload route
 is simpler to run and monitor than two.

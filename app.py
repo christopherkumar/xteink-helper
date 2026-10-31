@@ -9,8 +9,10 @@ import zipfile
 from collections import deque
 from datetime import datetime
 from pathlib import Path
+from typing import Annotated
 
-from flask import Flask, jsonify, redirect, request, send_from_directory
+from fastapi import FastAPI, File, Request, UploadFile
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 
 from main import process_epub
 
@@ -20,8 +22,9 @@ MAX_UPLOAD_MB = int(os.environ.get("MAX_UPLOAD_MB", "500"))
 HISTORY_LIMIT = 100
 STATIC_DIR = Path(__file__).parent / "static"
 
-app = Flask(__name__, static_folder=None)
-app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_MB * 1024 * 1024
+MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
+
+app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
 # In-memory activity log, newest first. No DB — this is a single-container,
 # no-auth homelab tool, so history doesn't need to survive a restart.
@@ -52,8 +55,15 @@ def log(name: str, ok: bool, message: str) -> None:
     )
 
 
-@app.after_request
-def add_isolation_headers(response):
+@app.middleware("http")
+async def upload_limit_and_isolation_headers(request: Request, call_next):
+    # Reject oversized uploads up front from Content-Length (FastAPI has no
+    # equivalent of Flask's MAX_CONTENT_LENGTH).
+    length = request.headers.get("content-length")
+    if length and length.isdigit() and int(length) > MAX_UPLOAD_BYTES:
+        response = JSONResponse({"error": "upload too large"}, status_code=413)
+    else:
+        response = await call_next(request)
     # CrossPoint's dither pipeline runs in a Web Worker over a SharedArrayBuffer,
     # which browsers only allow inside a cross-origin-isolated context.
     response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
@@ -61,44 +71,23 @@ def add_isolation_headers(response):
     return response
 
 
-# --- CrossPoint PXC converter: static SPA served from ./static (vite build output).
-# The OceanofPDFs remover lives inside this same page as a tab (see removerTab.ts). ---
-
-
-@app.route("/")
-def converter_index():
-    return send_from_directory(STATIC_DIR, "index.html")
-
-
-@app.route("/assets/<path:filename>")
-def converter_assets(filename):
-    return send_from_directory(STATIC_DIR / "assets", filename)
-
-
-@app.route("/<path:filename>")
-def converter_static(filename):
-    file_path = STATIC_DIR / filename
-    if file_path.is_file():
-        return send_from_directory(STATIC_DIR, filename)
-    return converter_index()
-
-
 # --- OceanofPDFs watermark remover: JSON API consumed by the remover tab ---
 
 
-@app.route("/remover")
+@app.get("/remover")
 def remover_redirect():
-    return redirect("/#remover")
+    return RedirectResponse("/#remover", status_code=302)
 
 
-@app.route("/remover/history")
+@app.get("/remover/history")
 def remover_history():
-    return jsonify(history=list(history))
+    return {"history": list(history)}
 
 
-@app.route("/remover/upload", methods=["POST"])
-def remover_upload():
-    files = [f for f in request.files.getlist("book") if f.filename]
+# Plain (non-async) def so FastAPI runs the blocking EPUB processing in its threadpool.
+@app.post("/remover/upload")
+def remover_upload(book: Annotated[list[UploadFile] | None, File()] = None):
+    files = [f for f in book or [] if f.filename]
 
     if not BOOKORBIT_LIBRARY_DIR:
         INGEST_DIR.mkdir(parents=True, exist_ok=True)
@@ -111,7 +100,8 @@ def remover_upload():
                 continue
 
             work_path = Path(tmp) / name
-            f.save(work_path)
+            with work_path.open("wb") as out:
+                shutil.copyfileobj(f.file, out)
 
             try:
                 _, hits = process_epub(work_path, dry_run=False)
@@ -134,13 +124,29 @@ def remover_upload():
             note = f"cleaned {hits} watermark hit(s)" if hits else "no watermarks found"
             log(name, True, f"{note} — queued for {queued_to}")
 
-    return jsonify(history=list(history))
+    return {"history": list(history)}
 
 
-@app.route("/health")
+@app.get("/health")
 def health():
     return {"status": "ok"}
 
 
+# --- CrossPoint PXC converter: static SPA served from ./static (vite build output).
+# The OceanofPDFs remover lives inside this same page as a tab (see removerTab.ts).
+# Registered last: the catch-all would otherwise shadow the routes above. ---
+
+
+@app.api_route("/{filename:path}", methods=["GET", "HEAD"])
+def converter_static(filename: str):
+    static_root = STATIC_DIR.resolve()
+    file_path = (static_root / filename).resolve()
+    if file_path.is_relative_to(static_root) and file_path.is_file():
+        return FileResponse(file_path)
+    return FileResponse(static_root / "index.html")
+
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8085)
+    import uvicorn
+
+    uvicorn.run(app, host="0.0.0.0", port=8085)
